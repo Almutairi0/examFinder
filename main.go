@@ -166,7 +166,7 @@ func main() {
 						event.SetStartAt(startTime)
 						event.SetEndAt(endTime)
 						hasCalEvents = true
-						fmt.Printf("➕ Added %s to calendar stream.\n", currentExam.courseCode)
+						fmt.Printf("Added %s to calendar stream.\n", currentExam.courseCode)
 
 					} else {
 
