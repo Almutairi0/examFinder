@@ -11,6 +11,7 @@ import (
 	"time"
 
 	ics "github.com/arran4/golang-ical"
+	"github.com/fatih/color"
 	"github.com/ledongthuc/pdf"
 )
 
@@ -171,11 +172,11 @@ func main() {
 					} else {
 
 						fmt.Println("\n------")
-						fmt.Printf("Code:  %s\n", currentExam.courseCode)
-						fmt.Printf("Title: %s\n", currentExam.courseTitle)
-						fmt.Printf("Date:  %s (%s)\n", currentExam.examDate, currentExam.examDay)
-						fmt.Printf("Time:  %s\n", currentExam.examTime)
-						fmt.Printf("Place: %s\n", currentExam.examPlace)
+						color.Cyan("Code:  %s\n", currentExam.courseCode)
+						color.Blue("Title: %s\n", currentExam.courseTitle)
+						color.Green("Date:  %s (%s)\n", currentExam.examDate, currentExam.examDay)
+						color.White("Time:  %s\n", currentExam.examTime)
+						color.Yellow("Place: %s\n", currentExam.examPlace)
 					}
 
 					// Move our outer loop index forward so we don't re-parse inside this block
