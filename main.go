@@ -42,6 +42,11 @@ func main() {
 		fmt.Printf("Your courses: %v\n", targetCourses)
 	}
 
+	// ADD THIS CHECK HERE TO FIX THE WARNING:
+	if err := scanner.Err(); err != nil {
+		log.Printf("Error reading input standard error: %v", err)
+	}
+
 	var outputMode int
 	fmt.Println("\nChoose 1 for terminal version and 2 for ics version")
 	_, err := fmt.Scan(&outputMode)
@@ -54,10 +59,10 @@ func main() {
 	hasCalEvents := false
 
 	rawText, err := readPdf("Exams.pdf")
-
 	if err != nil {
 		log.Fatalf("Failed to read %v", err)
 	}
+
 	// Pre-compile regular expressions to dynamically match layout shapes instead of hardcoded index offsets
 	dateRegex := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 	timeRegex := regexp.MustCompile(`\d{2}:\d{2}`)
@@ -72,7 +77,7 @@ func main() {
 
 	// Loop using an index so we can check neighboring words
 	for i := 0; i < len(words); i++ {
-		// Check if words[i] matches any course code in out list
+		// Check if words[i] matches any course code in our list
 		if isTargetCourse(words[i], targetCourses) {
 			fmt.Printf("Found target course! %s\n", words[i])
 
@@ -81,13 +86,11 @@ func main() {
 				if words[j] == "College" || words[j] == "Online" {
 
 					// Slice out all messy structural text between the code and location marker
-
 					blockWords := words[i+1 : j]
 					var titleParts []string
 					var examDate, examDay, examTime, amPm string
 
 					// Dynamically classify each string token inside the row segment
-
 					for _, w := range blockWords {
 						cleanWord := strings.Trim(w, "| ")
 						if cleanWord == "" {
@@ -95,27 +98,24 @@ func main() {
 						}
 
 						// Match explicit date pattern (e.g., 2026-06-15)
-
 						if dateRegex.MatchString(cleanWord) {
 							examDate = cleanWord
 							continue
 						}
 
 						// Match text token against known global calendar days
-
 						if daysOfWeek[strings.ToUpper(cleanWord)] {
 							examDay = cleanWord
 							continue
 						}
 
 						// Isolate AM/PM indicators to reconstruct accurate parse templates
-
 						if strings.ToUpper(cleanWord) == "AM" || strings.ToUpper(cleanWord) == "PM" {
 							amPm = cleanWord
 							continue
 						}
-						// Accumulate multiple time stamps safely (handles missing or stray separator dashes)
 
+						// Accumulate multiple time stamps safely
 						if timeRegex.MatchString(cleanWord) {
 							if examTime == "" {
 								examTime = cleanWord
@@ -126,17 +126,16 @@ func main() {
 						}
 
 						// Filter out PDF structural filler; everything else belongs to the title
-
 						if cleanWord != "At" {
 							titleParts = append(titleParts, cleanWord)
 						}
 					}
 
 					// Explicitly re-attach AM/PM marker to the extracted time segment
-
 					if amPm != "" && examTime != "" {
 						examTime = examTime + " " + amPm
 					}
+
 					currentExam := exam{
 						courseCode:  words[i],
 						courseTitle: strings.Join(titleParts, " "),
@@ -145,22 +144,21 @@ func main() {
 						examTime:    examTime,
 						examPlace:   words[j],
 					}
-					// Restore complete location text safely if it was split across fields
 
+					// Restore complete location text safely if it was split across fields
 					if j > 0 && words[j-1] == "At" {
 						currentExam.examPlace = "At " + words[j]
 					}
 
 					if outputMode == 2 {
-
-						// Now we gonna create a unique event for each course
+						// Create a unique event for each course
 						event := cal.AddEvent(fmt.Sprintf("%d-%s@examfinder.local", time.Now().UnixNano(), currentExam.courseCode))
 						event.SetSummary(currentExam.courseTitle)
 						event.SetDescription("Final Exam")
 						event.SetLocation(currentExam.examPlace)
 						startTime, endTime, err := parseExamTimes(currentExam.examDate, currentExam.examTime)
 						if err != nil {
-							log.Fatalf("Error prasing exam time for %s: %v , So we gonna go for the creattion of the event time", currentExam.courseCode, err)
+							log.Printf("Error parsing exam time for %s: %v. Using fallback times.", currentExam.courseCode, err)
 							startTime = time.Now()
 							endTime = time.Now().Add(2 * time.Hour)
 						}
@@ -170,23 +168,42 @@ func main() {
 						fmt.Printf("Added %s to calendar stream.\n", currentExam.courseCode)
 
 					} else {
-
 						fmt.Println("\n------")
-						color.Cyan("Code:  %s\n", currentExam.courseCode)
-						color.Blue("Title: %s\n", currentExam.courseTitle)
-						color.Green("Date:  %s (%s)\n", currentExam.examDate, currentExam.examDay)
-						color.White("Time:  %s\n", currentExam.examTime)
-						color.Yellow("Place: %s\n", currentExam.examPlace)
+						color.Cyan("Code:   %s\n", currentExam.courseCode)
+						color.Blue("Title:  %s\n", currentExam.courseTitle)
+
+						// 1. Convert the exam date string to a time object
+						examTimeObj, err := time.Parse("2006-01-02", currentExam.examDate)
+
+						if err != nil {
+
+							// FALLBACK: If the date is unreadable, just print it normally without crashing
+							color.Green("Date:   %s (%s)\n", currentExam.examDate, currentExam.examDay)
+						} else {
+
+							// 2. Get today's date at midnight for an accurate comparison
+							now := time.Now()
+							today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
+							// 3. Calculate the number of days left
+							daysLeft := int(examTimeObj.Sub(today).Hours() / 24)
+
+							// 4. Print the date with the countdown
+							color.Green("Date:   %s (%s) [%d days left]\n", currentExam.examDate, currentExam.examDay, daysLeft)
+						}
+
+						color.White("Time:   %s\n", currentExam.examTime)
+						color.Yellow("Place:  %s\n", currentExam.examPlace)
 					}
 
 					// Move our outer loop index forward so we don't re-parse inside this block
-
 					i = j
 					break
 				}
 			}
 		}
 	}
+
 	if outputMode == 2 && hasCalEvents {
 		filename := "my_exam_schedule.ics"
 		err = os.WriteFile(filename, []byte(cal.Serialize()), 0644)
@@ -195,12 +212,12 @@ func main() {
 		}
 		fmt.Printf("\n Success! All exams compiled into a single file: %s\n", filename)
 	}
-
 }
 
 func parseExamTimes(dateStr, timeStr string) (time.Time, time.Time, error) {
 
 	// Define a regular expression to look for hour patterns (e.g., 09:00 or 11:00)
+
 	timeRegex := regexp.MustCompile(`\d{2}:\d{2}`)
 
 	// Using -1 extracts all distinct time groupings matching the pattern without layout constraints
@@ -210,29 +227,27 @@ func parseExamTimes(dateStr, timeStr string) (time.Time, time.Time, error) {
 		return time.Time{}, time.Time{}, fmt.Errorf("invalid date/time inputs (date: '%s', time: '%s')", dateStr, timeStr)
 	}
 
-	startHM := times[0] // Always the first time found
+	startHM := times[0]
 	var endHM string
 
 	if len(times) >= 2 {
-		endHM = times[1] // The second time found
-	} else {
-		// Fallback for cases ("• 03:00 PM") where only one time shows up.
-		// We'll set the exam to automatically end 2 hours after it starts.
+		endHM = times[1]
+	} else { // Fallback for cases ("• 03:00 PM") where only one time shows up.
 		endHM = startHM
 	}
 
-	// Check for AM/PM marker safely
 	amPM := "AM"
 	if strings.Contains(strings.ToUpper(timeStr), "PM") {
 		amPM = "PM"
 	}
 
-	startTemplate := fmt.Sprintf("%s %s %s", dateStr, startHM, amPM) // "2026-06-14 09:00 AM"
-	endTemplate := fmt.Sprintf("%s %s %s", dateStr, endHM, amPM)     // "2026-06-14 11:00 AM"
+	startTemplate := fmt.Sprintf("%s %s %s", dateStr, startHM, amPM)
+	endTemplate := fmt.Sprintf("%s %s %s", dateStr, endHM, amPM)
 
 	// The New Stencil Layout
 	// Since the date format is Year-Month-Day, the template layout must match
 	// using Go's magic reference parameters: 2006 (Year), 01 (Month), 02 (Day).
+
 	layout := "2006-01-02 03:04 PM"
 
 	startTime, err := time.ParseInLocation(layout, startTemplate, time.Local)
@@ -245,12 +260,11 @@ func parseExamTimes(dateStr, timeStr string) (time.Time, time.Time, error) {
 		return time.Time{}, time.Time{}, err
 	}
 
-	if len(times) < 2 { // Safety fallback: If only one time was printed (e.g. "• 03:00 PM"), auto-expire after 2 hours
+	if len(times) < 2 { //We'll set the exam to automatically end 2 hours after it starts in case of only one time shows up.
 		endTime = startTime.Add(2 * time.Hour)
 	}
 
 	return startTime, endTime, nil
-
 }
 
 func isTargetCourse(word string, targets []string) bool {
@@ -263,14 +277,12 @@ func isTargetCourse(word string, targets []string) bool {
 }
 
 func readPdf(path string) (string, error) {
-	// Open the local PDF file
 	f, r, err := pdf.Open(path)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
 
-	// Use a bytes.Buffer to capture text fragments efficiently
 	var buf bytes.Buffer
 	b, err := r.GetPlainText()
 	if err != nil {
