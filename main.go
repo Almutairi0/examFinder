@@ -1,12 +1,16 @@
 package main
 
 import (
+	"io/fs"
+	"path/filepath"
+
 	"bufio"
 	"bytes"
 	"fmt"
 	"log"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,8 +29,49 @@ type exam struct {
 }
 
 func main() {
-	var targetCourses []string
+
+	targetFolder := "."
+
+	pdfFiles := find(targetFolder, ".pdf")
+
+	if len(pdfFiles) == 0 {
+		log.Fatalf("There is no pdf files to read")
+	}
+
+	var selectedPDF string
+
 	scanner := bufio.NewScanner(os.Stdin)
+
+	// If multiple PDFs exist, prompt the user to select one via a numbered menu.
+
+	if len(pdfFiles) > 1 {
+		fmt.Println("There is more than one file choose one")
+
+		for i, path := range pdfFiles {
+			// Print formatted list: [1] file.pdf
+			fmt.Printf("%v %v\n", i+1, path)
+		}
+
+		fmt.Println("\nEnter a Number")
+		scanner.Scan()
+		choiceStr := strings.TrimSpace(scanner.Text())
+		choice, err := strconv.Atoi(choiceStr) // Convert user input to integer
+
+		if err != nil || choice < 1 || choice > len(pdfFiles) {
+			log.Fatalf("Invalid selection")
+		}
+
+		// Subtract 1 because slice indices start at 0, but our menu started at 1
+
+		selectedPDF = pdfFiles[choice-1]
+	} else {
+		// Auto-select if only one PDF is found
+		selectedPDF = pdfFiles[0]
+	}
+
+	fmt.Printf("\nTargeting file: %s\n\n", selectedPDF)
+
+	var targetCourses []string
 
 	fmt.Println("Enter your course codes (press Enter on a blank line to start):")
 	for scanner.Scan() {
@@ -58,9 +103,9 @@ func main() {
 	cal.SetMethod(ics.MethodPublish)
 	hasCalEvents := false
 
-	rawText, err := readPdf("Exams.pdf")
+	rawText, err := readPdf(selectedPDF)
 	if err != nil {
-		log.Fatalf("Failed to read %v", err)
+		log.Fatalf("Failed to read %v: %v", selectedPDF, err)
 	}
 
 	// Pre-compile regular expressions to dynamically match layout shapes instead of hardcoded index offsets
@@ -295,4 +340,28 @@ func readPdf(path string) (string, error) {
 	}
 
 	return buf.String(), nil
+}
+
+// Source - https://stackoverflow.com/a/67629473
+// Posted by Zombo
+// Retrieved 2026-07-09, License - CC BY-SA 4.0
+
+func find(root, ext string) []string {
+	var matches []string
+
+	// WalkDir traverses the file tree starting at the root
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		// If the file extension matches our target (e.g., ".pdf"), save its path
+		if filepath.Ext(entry.Name()) == ext {
+			matches = append(matches, path)
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("warning: error walking %q: %v", root, err)
+	}
+	return matches
 }
