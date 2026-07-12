@@ -258,7 +258,7 @@ func main() {
 	if outputMode == 2 && hasCalEvents {
 		filename := "my_exam_schedule.ics"
 
-		err = os.WriteFile(filename, []byte(cal.Serialize()), 0644)
+		err = os.WriteFile(filename, []byte(cal.Serialize(ics.WithNewLineWindows)), 0644)
 		if err != nil {
 			log.Fatalf("Error saving collective ICS file: %v", err)
 		}
