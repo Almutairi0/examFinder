@@ -209,6 +209,12 @@ func main() {
 						}
 						event.SetStartAt(startTime)
 						event.SetEndAt(endTime)
+						reminder := ics.NewAlarm("")
+						reminder.SetSummary(fmt.Sprintf("%v coming in 2 hours", currentExam.courseTitle))
+						reminder.SetDescription(fmt.Sprintf("%v coming in 2 hours", currentExam.courseTitle))
+						reminder.SetAction(ics.ActionDisplay)
+						reminder.SetTrigger("-PT2H")
+						event.AddVAlarm(reminder)
 						hasCalEvents = true
 						fmt.Printf("Added %s to calendar stream.\n", currentExam.courseCode)
 
@@ -251,6 +257,7 @@ func main() {
 
 	if outputMode == 2 && hasCalEvents {
 		filename := "my_exam_schedule.ics"
+
 		err = os.WriteFile(filename, []byte(cal.Serialize()), 0644)
 		if err != nil {
 			log.Fatalf("Error saving collective ICS file: %v", err)
